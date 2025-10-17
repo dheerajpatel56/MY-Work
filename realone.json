@@ -1,0 +1,98 @@
+{
+  "name": "Faculty Class Reminder",
+  "nodes": [
+    {
+      "id": "1",
+      "name": "Every 15 Minutes",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "parameters": {
+        "triggerTimes": [
+          {
+            "mode": "everyX",
+            "unit": "minutes",
+            "value": 15
+          }
+        ]
+      }
+    },
+    {
+      "id": "2",
+      "name": "Read Timetable (Google Sheets)",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 2,
+      "position": [500, 300],
+      "credentials": {
+        "googleApi": "Your Google API Credential"
+      },
+      "parameters": {
+        "operation": "read",
+        "sheetName": "Faculty_Timetable",
+        "range": "A:F"
+      }
+    },
+    {
+      "id": "3",
+      "name": "Filter Next Class",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [750, 300],
+      "parameters": {
+        "functionCode": "const now = new Date();\nconst currentDay = now.toLocaleString('en-US', { weekday: 'long' });\nconst currentTime = now.getHours() * 60 + now.getMinutes();\n\n// Helper to parse time like '9:00 AM'\nfunction parseTime(timeStr) {\n  const [time, modifier] = timeStr.split(' ');\n  let [hours, minutes] = time.split(':').map(Number);\n  if (modifier === 'PM' && hours !== 12) hours += 12;\n  if (modifier === 'AM' && hours === 12) hours = 0;\n  return hours * 60 + (minutes || 0);\n}\n\nconst upcoming = items\n  .filter(item => item.json.Day === currentDay)\n  .map(item => {\n    const [startStr] = item.json['Time Slot'].split('-').map(s => s.trim());\n    const startMinutes = parseTime(startStr);\n    return { ...item.json, startMinutes };\n  })\n  .filter(i => i.startMinutes > currentTime)\n  .sort((a, b) => a.startMinutes - b.startMinutes)[0];\n\nreturn upcoming ? [{ json: upcoming }] : [];"
+      }
+    },
+    {
+      "id": "4",
+      "name": "Send Reminder (Gmail)",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 1,
+      "position": [1000, 300],
+      "credentials": {
+        "gmailOAuth2": "Your Gmail Credential"
+      },
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "to": "={{$json[\"Email\"]}}",
+        "subject": "Upcoming Class Reminder",
+        "text": "Hello {{$json[\"Faculty Name\"]}},\\n\\nYou have your next class '{{ $json[\"Subject\"] }}' starting soon at {{$json[\"Time Slot\"]}} in room {{$json[\"Room No\"]}}.\\n\\nHave a great session!\\n\\n— Automated Faculty Reminder"
+      }
+    }
+  ],
+  "connections": {
+    "Every 15 Minutes": {
+      "main": [
+        [
+          {
+            "node": "Read Timetable (Google Sheets)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Timetable (Google Sheets)": {
+      "main": [
+        [
+          {
+            "node": "Filter Next Class",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Next Class": {
+      "main": [
+        [
+          {
+            "node": "Send Reminder (Gmail)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

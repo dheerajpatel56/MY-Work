@@ -1,0 +1,126 @@
+{
+  "name": "Faculty Class Reminder",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "f586fe27-8287-4a03-8e03-d4927e0fe773",
+      "name": "Every 15 Minutes",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [
+        400,
+        256
+      ]
+    },
+    {
+      "parameters": {
+        "sheetId": "1PJRjNi7tys2xMryxZAIynR5IQidx7uqPpc87zBFDsb0",
+        "options": {}
+      },
+      "id": "17fe076f-2759-4630-892e-e08a54b51d05",
+      "name": "Read Timetable (Google Sheets)",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 2,
+      "position": [
+        656,
+        256
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "OABSiMnuCgpzCjgm",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "const now = new Date();\nconst currentDay = now.toLocaleString('en-US', { weekday: 'long' });\nconst currentTime = now.getHours() * 60 + now.getMinutes();\n\n// Helper to parse time like '9:00 AM'\nfunction parseTime(timeStr) {\n  const [time, modifier] = timeStr.split(' ');\n  let [hours, minutes] = time.split(':').map(Number);\n  if (modifier === 'PM' && hours !== 12) hours += 12;\n  if (modifier === 'AM' && hours === 12) hours = 0;\n  return hours * 60 + (minutes || 0);\n}\n\nconst upcoming = items\n  .filter(item => item.json.Day === currentDay)\n  .map(item => {\n    const [startStr] = item.json['Time Slot'].split('-').map(s => s.trim());\n    const startMinutes = parseTime(startStr);\n    return { ...item.json, startMinutes };\n  })\n  .filter(i => i.startMinutes > currentTime)\n  .sort((a, b) => a.startMinutes - b.startMinutes)[0];\n\nreturn upcoming ? [{ json: upcoming }] : [];"
+      },
+      "id": "2509c7ae-5508-4116-a3d7-abfd06c2f28f",
+      "name": "Filter Next Class",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        912,
+        256
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "subject": "Upcoming Class Reminder",
+        "message": "=Hello {{$json[\"Faculty Name\"]}},\n\nYou have your next class '{{ $json[\"Subject\"] }}' starting soon at {{$json[\"Time Slot\"]}} in room {{$json[\"Room No\"]}}.\n\nHave a great session!\n\n— Automated Faculty Reminder\n",
+        "toList": [
+          "=={{$json[\"Email\"]}}\n"
+        ],
+        "additionalFields": {}
+      },
+      "id": "796bc591-08fe-4c9a-a8df-0b0940bcb938",
+      "name": "Send Reminder (Gmail)",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 1,
+      "position": [
+        1152,
+        256
+      ],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "ZDsRzjs9kWFFvOHU",
+          "name": "Gmail account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Every 15 Minutes": {
+      "main": [
+        [
+          {
+            "node": "Read Timetable (Google Sheets)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Timetable (Google Sheets)": {
+      "main": [
+        [
+          {
+            "node": "Filter Next Class",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Next Class": {
+      "main": [
+        [
+          {
+            "node": "Send Reminder (Gmail)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Kolkata",
+    "callerPolicy": "workflowsFromSameOwner",
+    "executionTimeout": -1,
+    "availableInMCP": false,
+    "errorWorkflow": "I7OujCGXDXF1QP9H"
+  },
+  "versionId": "030f092b-e04f-4fc1-a24a-5f32cbbc5d56",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "660c8bf5d3a20a0ab06bc09bbae0e72fc39262261de1b5297d17b3668d5f311a"
+  },
+  "id": "I7OujCGXDXF1QP9H",
+  "tags": []
+}
